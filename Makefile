@@ -1,7 +1,7 @@
 
 srcs = $(wildcard *.c)
 objs = $(srcs:.c=.o)
-lib = net.so
+lib = libnet.so
 
 cflags = -I/usr/lib64/csv9.4.1/ta6le -I.  -shared -fPIC -nostdlib
 

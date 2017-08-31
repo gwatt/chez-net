@@ -1,4 +1,10 @@
 
+#include <stdio.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
+
 #include <net.h>
 
 #define AF(name, fam) int af_##name = AF_##fam
@@ -58,11 +64,40 @@ IN(allrtrs_group, ALLRTRS_GROUP);
 IN(max_local_group, MAX_LOCAL_GROUP);
 
 ptr receive_offset(int sockfd, char *buf, int offset, size_t len, int flags) {
-	return int_errno(recv(sockfd, buf + offset, len, flags));
+	int count = recv(sockfd, buf + offset, len, flags);
+	int err = errno;
+	if (count < 0) fputs(strerror(err), stderr);
+	return Scons(Sinteger(count), Sinteger(err));
 }
 
 ptr send_offset(int sockfd, char *buf, int offset, size_t len, int flags) {
-	return int_errno(send(sockfd, buf + offset, len, flags));
+	int count = send(sockfd, buf + offset, len, flags | MSG_DONTWAIT);
+	int err = errno;
+	if (count < 0) fputs(strerror(err), stderr);
+	return Scons(Sinteger(count), Sinteger(err));
+}
+
+ptr c_dial(int proto, const char *host, const char *serv) {
+	struct addrinfo hints = {
+		.ai_family = AF_UNSPEC,
+		.ai_socktype = SOCK_STREAM,
+		.ai_protocol = IPPROTO_TCP
+	};
+	struct addrinfo *res = 0;
+	int err;
+	int sock;
+
+	err = getaddrinfo(host, serv, 0, &res);
+	if (err) fputs(gai_strerror(err), stderr);
+
+	sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+	err = errno;
+	if (sock < 0) fputs(strerror(err), stderr);
+	err = connect(sock, res->ai_addr, res->ai_addrlen);
+	if (err) fputs(strerror(err), stderr);
+
+	if (res) freeaddrinfo(res);
+	return Scons(Sinteger(sock), Sinteger(err));
 }
 
 ptr socket_errno(int family, int type, int protocol) {

@@ -11,15 +11,14 @@
     ip:sctp ip:udplite ip:mpls ip:raw
     sock:stream sock:dgram sock:seqpacket
     sock:raw sock:rdm
-    c:socket c:getservbyname c:servent c:strerror
-    c:receive-offset c:send-offset
+    c:strerror c:dial c:receive-offset c:send-offset
     c:close c:shutdown)
   (import (chezscheme))
 
   (define lso
     (begin
       (for-each load-shared-object
-        '("libc.so.6" "net.so"))))
+        '("libc.so.6" "libnet.so"))))
 
   (define-syntax define-foreign-value
     (syntax-rules ()
@@ -77,39 +76,6 @@
     (sock:raw "sock_raw")
     (sock:rdm "sock_rdm"))
 
-  (define-ftype c:sockaddr
-    (struct))
-
-  (define-ftype c:addrinfo
-    (struct
-      [flags int]
-      [family int]
-      [type int]
-      [proto int]
-      [len size_t]
-      [addr void*]
-      [name (* char)]
-      [next (* c:addrinfo)]))
-
-  (define-ftype c:servent
-    (struct
-      [name (* char)]
-      [aliases (* (* char))]
-      [port (endian big unsigned-16)]
-      [proto (* char)]))
-
-  (define c:socket
-    (foreign-procedure "socket_errno"
-      (int int int) ptr))
-
-  (define c:connect
-    (foreign-procedure "connect"
-      (int (* c:sockaddr) size_t) int))
-
-  (define c:getservbyname
-    (foreign-procedure "getservbyname"
-      (string string) (* c:servent)))
-
   (define c:receive-offset
     (foreign-procedure "receive_offset"
       (int u8* int long int) ptr))
@@ -129,10 +95,13 @@
   (define c:strerror
     (foreign-procedure "strerror"
       (int) string))
+
+  (define c:dial
+    (foreign-procedure "c_dial" (int string string) ptr))
 )
 
 (library (net)
-  (export socket make-socket socket->port socket-connect)
+  (export socket make-socket socket->port dial serve)
   (import (chezscheme)
     (net c))
 
@@ -140,38 +109,38 @@
 
   (define unwrap-errno
     (case-lambda
-      [(resp &cond) (unwrap-errno resp (lambda (x) (> x 0)) &cond)]
-      [(resp test? &cond)
+      [(resp who) (unwrap-errno resp (lambda (x) (> x 0)) who)]
+      [(resp test? who)
        (unless (test? (car resp))
-         (raise (condition &cond (make-message-condition (c:strerror (cdr resp))))))
+         (raise (condition (make-who-condition who) (make-i/o-error) (make-message-condition (c:strerror (cdr resp))))))
        (car resp)]))
 
   (define (socket-r! sock)
     (lambda (bv start n)
-      (let* ([read+errno (c:receive-offset (socket-fd sock) bv start n)]
-             [read (car read+errno)]
-             [errno (cdr read+errno)])
-        (if (zero? errno)
-            read
-            (error 'socket-r! (c:strerror errno))))))
+      (unwrap-errno (c:receive-offset sock bv start n 0) 'socket-r!)))
 
   (define (socket-w! sock)
     (lambda (bv start n)
-      (c:send-offset (socket-fd sock) bv start n)))
+      (unwrap-errno (c:send-offset sock bv start n 0) 'socket-w!)))
 
-  (define (socket->port sock)
-    (make-custom-binary-input/output-port
-      (string-append "socket" " " (number->string (socket-fd sock)))
-      (socket-r! sock)
-      (socket-w! sock)
-      #f
-      #f
-      (lambda ()
-        (c:close (socket-fd sock))
-        (c:shutdown (socket-fd sock)))))
-
-  (define socket-connect
+  (define socket->port
     (case-lambda
-      [(unix-domain) (socket-connect)]
-      [(host port) (socket-connect)]))
+      [(sock transcoder) (transcoded-port (socket->port sock) transcoder)]
+      [(sock)
+       (let ([fd (socket-fd sock)])
+         (make-custom-binary-input/output-port
+           (string-append "socket " (number->string fd))
+           (socket-r! fd)
+           (socket-w! fd)
+           #f
+           #f
+           (lambda ()
+             (c:close fd))))]))
+
+  (define (dial host port)
+    (let ([sockfd (unwrap-errno (c:dial 0 host port) 'dial)])
+      (make-socket sockfd)))
+
+  (define (serve host port fn)
+    (error 'serve "not implemented"))
 )
