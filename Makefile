@@ -1,9 +1,9 @@
 
-srcs = $(wildcard *.c)
-objs = $(srcs:.c=.o)
+srcs = net.c
+objs = net.o
 lib = libnet.so
 
-cflags = -I/usr/lib64/csv9.4.1/ta6le -I.  -shared -fPIC -nostdlib
+cflags = -I/usr/lib64/csv9.4.1/ta6le -I.  -shared -fPIC
 
 .PHONY: clean default
 
