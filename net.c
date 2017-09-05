@@ -7,7 +7,31 @@
 #include <errno.h>
 #include <unistd.h>
 
-#include <scheme.h>
+#ifdef _WIN32
+#  if __cplusplus
+#    ifdef SCHEME_IMPORT
+#      define EXPORT extern "C" __declspec (dllimport)
+#    elif SCHEME_STATIC
+#      define EXPORT extern "C"
+#    else
+#      define EXPORT extern "C" __declspec (dllexport)
+#    endif
+#  else
+#    ifdef SCHEME_IMPORT
+#      define EXPORT extern __declspec (dllimport)
+#    elif SCHEME_STATIC
+#      define EXPORT extern
+#    else
+#      define EXPORT extern __declspec (dllexport)
+#    endif
+#  endif
+#else
+#  if __cplusplus
+#    define EXPORT extern "C"
+#  else
+#    define EXPORT extern
+#  endif
+#endif
 
 struct fd_result {
 	int fd;
