@@ -50,6 +50,9 @@
            (raise (condition (make-who-condition 'dial) (make-i/o-error) (make-message-condition (strerror errval)))))
          (open-fd-input/output-port fd 'none transcoder))]))
 
-  (define (serve host port fn)
-    (error 'serve "not implemented"))
+  (define serve
+    (case-lambda
+      [(proto host port fn) (serve proto host port fn #f)]
+      [(proto host port fn transcoder)
+       (error 'serve "not implemented")]))
 )

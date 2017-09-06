@@ -47,13 +47,15 @@ const int ipproto_udp = IPPROTO_UDP;
 struct fd_result *c_dial(int proto, const char *host, const char *serv, struct fd_result *fdr) {
 	struct addrinfo hints = {
 		.ai_family = AF_UNSPEC,
-		.ai_socktype = SOCK_STREAM,
 		.ai_flags = AI_PASSIVE,
 		.ai_protocol = proto
 	};
 	struct addrinfo *addr = 0;
 
-	fdr->errval = getaddrinfo(host, serv, 0, &addr);
+	if (proto == IPPROTO_TCP) hints.ai_socktype = SOCK_STREAM;
+	else if (proto == IPPROTO_UDP) hints.ai_socktype = SOCK_DGRAM;
+
+	fdr->errval = getaddrinfo(host, serv, &hints, &addr);
 	if (fdr->errval) {
 		fdr->fd = -1;
 		fdr->strerror = gai_strerror;
@@ -62,8 +64,8 @@ struct fd_result *c_dial(int proto, const char *host, const char *serv, struct f
 
 	fdr->fd = socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
 	if (fdr->fd < 0) {
-		fdr->strerror = strerror;
 		fdr->errval = errno;
+		fdr->strerror = strerror;
 		goto out;
 	}
 	
