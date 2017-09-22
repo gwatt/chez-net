@@ -3,7 +3,7 @@ srcs = net.c
 objs = net.o
 lib = libnet.so
 
-cflags = -shared -fPIC
+cflags = -Wall -Wextra -pedantic -shared -fPIC
 
 .PHONY: clean default
 
