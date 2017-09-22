@@ -13,11 +13,23 @@
       [errval int]
       [strerror (* strerror-t)]))
 
+  (define (new-fd-result)
+    (make-ftype-pointer fd-result (foreign-alloc (ftype-sizeof fd-result))))
+
+  (define (ftype-free ft)
+    (foreign-free (ftype-pointer-address ft)))
+
   (define ip:tcp (foreign-ref 'int (foreign-entry "ipproto_tcp") 0))
   (define ip:udp (foreign-ref 'int (foreign-entry "ipproto_udp") 0))
 
   (define c:dial
     (foreign-procedure "c_dial" (int string string (* fd-result)) (* fd-result)))
+
+  (define c:listen
+    (foreign-procedure "c_listen" (int string string (* fd-result)) (* fd-result)))
+
+  (define c:accept
+    (foreign-procedure "c_accept" (int) (* fd-result)))
 
   (define (proto->number proto)
     (case proto
@@ -40,19 +52,29 @@
            (unless (transcoder? transcoder)
              (errorf 'dial "transcoder must be a valid transcoder or #f: ~s" transcoder)))
 
-       (let* ([res (c:dial (proto->number proto) host port
-                     (make-ftype-pointer fd-result (foreign-alloc (ftype-sizeof fd-result))))]
+       (let* ([res (c:dial (proto->number proto) host port (new-time))]
               [fd (ftype-ref fd-result (fd) res)]
               [errval (ftype-ref fd-result (errval) res)]
               [strerror (ftype-ref strerror-t () (ftype-ref fd-result (strerror) res))])
          (foreign-free (ftype-pointer-address res))
          (if (> 0 fd)
-           (raise (condition (make-who-condition 'dial) (make-i/o-error) (make-message-condition (strerror errval)))))
+             (raise (condition (make-who-condition 'dial) (make-i/o-error) (make-message-condition (strerror errval)))))
          (open-fd-input/output-port fd 'none transcoder))]))
 
   (define serve
     (case-lambda
       [(proto host port fn) (serve proto host port fn #f)]
       [(proto host port fn transcoder)
-       (error 'serve "not implemented")]))
+       (let* ([fdr (c:listen (proto->number proto) host port (new-fd-result))]
+              [fd (ftype-ref fd-result (fd) fdr)]
+              [errval (ftype-ref fd-result (errval) fdr)]
+              [strerror (ftype-ref strerror-t () (ftype-ref fd-result (strerror) fdr))])
+         (if (> 0 fd)
+             (raise (condition (make-who-condition 'serve) (make-i/o-error) (make-message-condition (strerror errval)))))
+         (call-with-port (open-fd-input/output-port fd 'none transcoder) fn))]))
+
+  (define (accept-forever fn)
+    (lambda (fd transcoder)
+      (let* ([fdr (c:accept fd (make-ftype-pointer fd-result ()])
+
 )
